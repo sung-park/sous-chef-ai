@@ -2,6 +2,8 @@ from google import genai
 from google.genai import types
 import os
 import json
+import base64
+from pathlib import Path
 from dotenv import load_dotenv
 
 # 환경 변수 로드
@@ -113,16 +115,80 @@ class RecipeAgent:
             print(f"레시피 생성 중 오류 발생: {e}")
             raise
 
-    def generate_image(self, dish_name: str, recipe_data: dict) -> str:
+    def generate_image(self, prompt: str, dish_name: str = "dish") -> str:
         """
-        요리 이미지 생성 (Imagen 3 사용 예정)
+        Imagen을 사용해서 요리 이미지 생성
 
         Args:
-            dish_name: 요리 이름
-            recipe_data: 레시피 데이터
+            prompt: 이미지 생성 프롬프트
+            dish_name: 요리 이름 (파일명에 사용)
 
         Returns:
-            str: 생성된 이미지 URL 또는 경로
+            str: 생성된 이미지 파일 경로
         """
-        # TODO: Imagen 3 API 연동 예정
-        pass
+        try:
+            # temp 폴더 생성 (없으면)
+            temp_dir = Path("temp")
+            temp_dir.mkdir(exist_ok=True)
+
+            # 이미지 생성 프롬프트 (영어로 번역)
+            image_prompt = f"A professional food photography of {prompt}, beautifully plated, appetizing, high quality, restaurant style"
+
+            print(f"🎨 이미지 생성 프롬프트: {image_prompt}")
+
+            # Imagen 4 모델 사용
+            response = self.client.models.generate_images(
+                model="imagen-4.0-generate-001",
+                prompt=image_prompt,
+                config=types.GenerateImagesConfig(
+                    number_of_images=1,
+                    aspect_ratio="1:1",
+                )
+            )
+
+            # 생성된 이미지 추출
+            if response.generated_images:
+                generated_image = response.generated_images[0]
+
+                # 이미지 데이터를 파일로 저장
+                # dish_name에서 특수문자 제거
+                safe_dish_name = "".join(c for c in dish_name if c.isalnum() or c in (' ', '_')).strip()
+                safe_dish_name = safe_dish_name.replace(' ', '_')
+
+                image_path = temp_dir / f"{safe_dish_name}_image.png"
+
+                # 이미지 데이터 저장
+                # PIL Image 객체인 경우
+                if hasattr(generated_image, 'save'):
+                    # PIL Image 객체인 경우 save 메서드 사용
+                    generated_image.save(image_path)
+                elif hasattr(generated_image, 'image'):
+                    # image 속성이 있는 경우
+                    image_data = generated_image.image
+                    if hasattr(image_data, 'save'):
+                        # PIL Image 객체
+                        image_data.save(image_path)
+                    elif isinstance(image_data, str):
+                        # base64 인코딩된 문자열인 경우
+                        image_bytes = base64.b64decode(image_data)
+                        with open(image_path, 'wb') as f:
+                            f.write(image_bytes)
+                    elif isinstance(image_data, bytes):
+                        # 이미 bytes인 경우
+                        with open(image_path, 'wb') as f:
+                            f.write(image_data)
+                elif hasattr(generated_image, 'bytes'):
+                    # bytes 속성이 있는 경우
+                    with open(image_path, 'wb') as f:
+                        f.write(generated_image.bytes)
+                else:
+                    raise Exception(f"알 수 없는 이미지 형식: {type(generated_image)}")
+
+                print(f"✅ 이미지 저장 완료: {image_path}")
+                return str(image_path)
+            else:
+                raise Exception("이미지가 생성되지 않았습니다.")
+
+        except Exception as e:
+            print(f"❌ 이미지 생성 중 오류 발생: {e}")
+            raise

@@ -82,6 +82,30 @@ def test_generate_recipe():
             print(f"  {i}. {step}")
         print()
 
+        # 이미지 생성 테스트
+        print("=" * 60)
+        print("🎨 이미지 생성 테스트")
+        print("=" * 60)
+        print()
+
+        try:
+            # 김치찌개 이미지 생성 프롬프트
+            image_prompt = "Korean kimchi jjigae (kimchi stew) in a traditional stone pot"
+            print(f"📸 이미지 프롬프트: {image_prompt}")
+            print(f"📡 Imagen API 호출 중...")
+            print()
+
+            image_path = agent.generate_image(image_prompt, dish_name)
+            print()
+            print(f"✅ 이미지 생성 및 저장 성공!")
+            print(f"📁 저장 경로: {image_path}")
+            print()
+
+        except Exception as e:
+            print(f"❌ 이미지 생성 실패: {e}")
+            import traceback
+            traceback.print_exc()
+
     except Exception as e:
         print(f"❌ 레시피 생성 실패: {e}")
         import traceback
