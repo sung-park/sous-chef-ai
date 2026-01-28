@@ -61,13 +61,37 @@ with col1:
 
             st.success("✅ 레시피 생성 완료!")
 
-            # 2단계: 단계별 이미지 생성
-            with st.spinner(f"📸 Imagen 4.0이 '{dish_name}' 조리 단계별 사진을 촬영 중입니다... (총 {len(recipe['steps'])}장)"):
-                step_images = agent.generate_step_images(dish_name, recipe)
-                st.session_state.step_images = step_images
+            # 2단계: 단계별 이미지 생성 (실시간 진행 상황 표시)
+            total_steps = len(recipe['steps'])
+
+            # 진행 상황을 표시할 컨테이너 생성
+            progress_container = st.empty()
+            status_container = st.empty()
+
+            # 진행 상황 콜백 함수
+            def update_progress(current, total, status):
+                with progress_container:
+                    progress_percent = current / total
+                    st.progress(progress_percent, text=f"📸 단계 {current}/{total} 이미지 생성 중...")
+
+                with status_container:
+                    if status == "generating":
+                        st.info(f"🎨 {current}단계 이미지를 생성하고 있습니다...")
+                    elif status == "completed":
+                        st.success(f"✅ {current}단계 이미지 생성 완료!")
+                    elif status in ["failed", "error"]:
+                        st.warning(f"⚠️ {current}단계 이미지 생성 실패")
+
+            # 이미지 생성 시작
+            step_images = agent.generate_step_images(dish_name, recipe, progress_callback=update_progress)
+            st.session_state.step_images = step_images
+
+            # 최종 결과 표시
+            progress_container.empty()
+            status_container.empty()
 
             success_count = len([img for img in step_images if img])
-            st.success(f"✅ 조리 단계별 사진 생성 완료! ({success_count}/{len(recipe['steps'])}장)")
+            st.success(f"✅ 조리 단계별 사진 생성 완료! ({success_count}/{total_steps}장)")
 
         except Exception as e:
             st.error(f"❌ 오류가 발생했습니다: {e}")

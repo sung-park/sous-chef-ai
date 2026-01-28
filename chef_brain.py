@@ -194,13 +194,14 @@ class RecipeAgent:
             print(f"❌ 이미지 생성 중 오류 발생: {e}")
             raise
 
-    def generate_step_images(self, dish_name: str, recipe_data: dict) -> list:
+    def generate_step_images(self, dish_name: str, recipe_data: dict, progress_callback=None) -> list:
         """
         레시피의 각 조리 단계별로 이미지를 생성
 
         Args:
             dish_name: 요리 이름
             recipe_data: 레시피 데이터 (steps 키 포함)
+            progress_callback: 진행 상황 콜백 함수 (optional)
 
         Returns:
             list: 생성된 이미지 파일 경로 리스트
@@ -217,16 +218,48 @@ class RecipeAgent:
 
         for i, step in enumerate(steps, 1):
             try:
+                # 진행 상황 콜백 호출
+                if progress_callback:
+                    progress_callback(i, total_steps, "generating")
+
                 # temp 폴더 생성 (없으면)
                 temp_dir = Path("temp")
                 temp_dir.mkdir(exist_ok=True)
 
                 # 단계별 프롬프트 생성
-                # 단계 설명에서 핵심 키워드 추출 (첫 50자 정도)
+                # 단계 설명에서 핵심 키워드 추출 (첫 100자)
                 step_desc = step[:100] if len(step) > 100 else step
 
-                # 이미지 생성 프롬프트
-                image_prompt = f"Step {i} of cooking {dish_name}: {step_desc}, Korean food cooking process, professional food photography"
+                # 조리 과정 키워드 파악
+                step_lower = step.lower()
+                cooking_action = ""
+                cookware = ""
+
+                # 조리 도구 파악
+                if "냄비" in step or "끓" in step or "삶" in step:
+                    cookware = "cooking pot"
+                    cooking_action = "cooking in pot"
+                elif "후라이팬" in step or "팬" in step or "볶" in step:
+                    cookware = "frying pan"
+                    cooking_action = "stir-frying in pan"
+                elif "도마" in step or "썰" in step or "자르" in step:
+                    cookware = "cutting board"
+                    cooking_action = "cutting and preparing"
+                elif "그릇" in step or "담" in step or "접시" in step:
+                    cookware = "ceramic bowl"
+                    cooking_action = "plated dish"
+                else:
+                    cookware = "cooking surface"
+                    cooking_action = "food preparation"
+
+                # 이미지 생성 프롬프트 (조리 과정 중심, 적절한 도구 사용)
+                image_prompt = f"""Korean {dish_name} cooking process - step {i}: {step_desc}.
+{cooking_action}, using {cookware}, home kitchen setting.
+Natural wooden table surface, soft natural daylight, realistic cooking scene.
+Action shot showing the actual cooking process, hands may be visible.
+IMPORTANT: Pure food photography only, absolutely no text overlays, no labels,
+no captions, no words, no letters, no numbers, no Korean text, no English text,
+no watermarks, no annotations. Just the food and cooking process in action."""
 
                 print(f"\n📸 단계 {i}/{total_steps} 이미지 생성 중...")
                 print(f"   프롬프트: {image_prompt[:80]}...")
@@ -272,13 +305,25 @@ class RecipeAgent:
 
                     print(f"   ✅ 단계 {i} 이미지 저장: {image_path}")
                     image_paths.append(str(image_path))
+
+                    # 성공 콜백
+                    if progress_callback:
+                        progress_callback(i, total_steps, "completed")
                 else:
                     print(f"   ⚠️ 단계 {i} 이미지 생성 실패")
                     image_paths.append(None)
 
+                    # 실패 콜백
+                    if progress_callback:
+                        progress_callback(i, total_steps, "failed")
+
             except Exception as e:
                 print(f"   ❌ 단계 {i} 이미지 생성 중 오류: {e}")
                 image_paths.append(None)
+
+                # 에러 콜백
+                if progress_callback:
+                    progress_callback(i, total_steps, "error")
 
         print(f"\n✅ 단계별 이미지 생성 완료! (성공: {len([p for p in image_paths if p])}/{total_steps})")
         return image_paths
