@@ -253,13 +253,15 @@ class RecipeAgent:
                     cooking_action = "food preparation"
 
                 # 이미지 생성 프롬프트 (조리 과정 중심, 적절한 도구 사용)
-                image_prompt = f"""Korean {dish_name} cooking process - step {i}: {step_desc}.
-{cooking_action}, using {cookware}, home kitchen setting.
-Natural wooden table surface, soft natural daylight, realistic cooking scene.
-Action shot showing the actual cooking process, hands may be visible.
-IMPORTANT: Pure food photography only, absolutely no text overlays, no labels,
-no captions, no words, no letters, no numbers, no Korean text, no English text,
-no watermarks, no annotations. Just the food and cooking process in action."""
+                # 텍스트 오버레이 방지를 위해 맨 앞과 뒤에 강력히 명시
+                image_prompt = f"""NO TEXT, NO WORDS, NO LETTERS, NO TYPOGRAPHY - Pure photography only.
+
+Korean {dish_name} being prepared. {cooking_action} using {cookware}.
+Home kitchen scene with natural daylight, wooden table, realistic food photography.
+Hands visible during cooking action.
+
+CRITICAL: This must be a photograph with ZERO text overlays, ZERO labels, ZERO captions,
+ZERO watermarks, ZERO annotations. Just show the food and cooking tools. No written content."""
 
                 print(f"\n📸 단계 {i}/{total_steps} 이미지 생성 중...")
                 print(f"   프롬프트: {image_prompt[:80]}...")
