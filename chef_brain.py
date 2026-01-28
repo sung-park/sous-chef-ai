@@ -35,6 +35,7 @@ class RecipeAgent:
 너는 20년 경력의 셰프이자 파워 블로거야.
 친절하고 감성적인 말투로 레시피를 작성해줘.
 각 단계마다 요리 팁이나 포인트를 자연스럽게 녹여서 설명해줘.
+단, 각 단계는 200자 이내로 간결하게 작성해줘.
 """
 
     def generate_recipe(self, dish_name: str) -> dict:
@@ -108,9 +109,9 @@ class RecipeAgent:
             return recipe_data
 
         except json.JSONDecodeError as e:
-            print(f"JSON 파싱 오류: {e}")
-            print(f"응답 내용:\n{response_text}")
-            raise
+            error_msg = f"JSON 파싱 오류: {e}\n\n응답 내용 (처음 500자):\n{response_text[:500]}\n\n응답 내용 (마지막 500자):\n{response_text[-500:]}"
+            print(error_msg)
+            raise ValueError(error_msg)
         except Exception as e:
             print(f"레시피 생성 중 오류 발생: {e}")
             raise
@@ -192,3 +193,92 @@ class RecipeAgent:
         except Exception as e:
             print(f"❌ 이미지 생성 중 오류 발생: {e}")
             raise
+
+    def generate_step_images(self, dish_name: str, recipe_data: dict) -> list:
+        """
+        레시피의 각 조리 단계별로 이미지를 생성
+
+        Args:
+            dish_name: 요리 이름
+            recipe_data: 레시피 데이터 (steps 키 포함)
+
+        Returns:
+            list: 생성된 이미지 파일 경로 리스트
+        """
+        image_paths = []
+
+        if 'steps' not in recipe_data:
+            raise ValueError("recipe_data에 'steps' 키가 없습니다.")
+
+        steps = recipe_data['steps']
+        total_steps = len(steps)
+
+        print(f"\n🎨 총 {total_steps}개의 조리 단계 이미지를 생성합니다...")
+
+        for i, step in enumerate(steps, 1):
+            try:
+                # temp 폴더 생성 (없으면)
+                temp_dir = Path("temp")
+                temp_dir.mkdir(exist_ok=True)
+
+                # 단계별 프롬프트 생성
+                # 단계 설명에서 핵심 키워드 추출 (첫 50자 정도)
+                step_desc = step[:100] if len(step) > 100 else step
+
+                # 이미지 생성 프롬프트
+                image_prompt = f"Step {i} of cooking {dish_name}: {step_desc}, Korean food cooking process, professional food photography"
+
+                print(f"\n📸 단계 {i}/{total_steps} 이미지 생성 중...")
+                print(f"   프롬프트: {image_prompt[:80]}...")
+
+                # Imagen 4 모델 사용
+                response = self.client.models.generate_images(
+                    model="imagen-4.0-generate-001",
+                    prompt=image_prompt,
+                    config=types.GenerateImagesConfig(
+                        number_of_images=1,
+                        aspect_ratio="1:1",
+                    )
+                )
+
+                # 생성된 이미지 추출
+                if response.generated_images:
+                    generated_image = response.generated_images[0]
+
+                    # 이미지 파일 경로 생성
+                    safe_dish_name = "".join(c for c in dish_name if c.isalnum() or c in (' ', '_')).strip()
+                    safe_dish_name = safe_dish_name.replace(' ', '_')
+                    image_path = temp_dir / f"{safe_dish_name}_step_{i}.png"
+
+                    # 이미지 저장
+                    if hasattr(generated_image, 'save'):
+                        generated_image.save(image_path)
+                    elif hasattr(generated_image, 'image'):
+                        image_data = generated_image.image
+                        if hasattr(image_data, 'save'):
+                            image_data.save(image_path)
+                        elif isinstance(image_data, str):
+                            image_bytes = base64.b64decode(image_data)
+                            with open(image_path, 'wb') as f:
+                                f.write(image_bytes)
+                        elif isinstance(image_data, bytes):
+                            with open(image_path, 'wb') as f:
+                                f.write(image_data)
+                    elif hasattr(generated_image, 'bytes'):
+                        with open(image_path, 'wb') as f:
+                            f.write(generated_image.bytes)
+                    else:
+                        raise Exception(f"알 수 없는 이미지 형식: {type(generated_image)}")
+
+                    print(f"   ✅ 단계 {i} 이미지 저장: {image_path}")
+                    image_paths.append(str(image_path))
+                else:
+                    print(f"   ⚠️ 단계 {i} 이미지 생성 실패")
+                    image_paths.append(None)
+
+            except Exception as e:
+                print(f"   ❌ 단계 {i} 이미지 생성 중 오류: {e}")
+                image_paths.append(None)
+
+        print(f"\n✅ 단계별 이미지 생성 완료! (성공: {len([p for p in image_paths if p])}/{total_steps})")
+        return image_paths
